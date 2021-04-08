@@ -3,17 +3,13 @@
 //--------------------------------------------------------------
 void ofApp::setup(){
     
-    ofSetFullscreen( false );
-    
     grabber.setup( 1280, 720 );
     tracker.setup();
     
-    image.load( "NoseGlasses.png" );
-    
-    blinkCounter = 0;
-    blinkTotal = 0;
     eyeAspectRatioLeft = 0.0;
     eyeAspectRatioRight = 0.0;
+    blinkCounter = 0;
+    blinkTotal = 0;
     isOn = false;
     guiIsOn = false;
     
@@ -22,18 +18,30 @@ void ofApp::setup(){
     gui.add( guiSlider_threshold.setup( "EAR threshold", 0.24, 0.0, 1.0 ) );
     gui.add( guiSlider_consec_frames.setup( "Consec frames", 3, 0, 10 ) );
     gui.add( guiToggle_logToFile.setup( "Log to file", false ) );
+    
+    
+    // open an outgoing OSC connection to HOST:PORT
+    oscSender.setup( HOST, PORT );
 
 }
 
 //--------------------------------------------------------------
 void ofApp::update(){
     
+    // Webcam
     grabber.update();
 
+    
     // Update tracker when there are new frames
     if ( grabber.isFrameNew() ) {
         tracker.update( grabber );
     }
+    
+    // OSC
+    ofxOscMessage msg;
+    msg.setAddress( "/blinkDetection" );
+    msg.addIntArg( isOn );
+    oscSender.sendMessage( msg, false );
 
 }
 
@@ -51,70 +59,42 @@ void ofApp::draw(){
     for ( auto instance : tracker.getInstances() ) {
         // Iterate over all landmarks
         for ( int i = 0; i < NUM_OF_LANDMARKS; i++ ) {
-            
             // Landmark points (positions)
             landmarkPos[i] = instance.getLandmarks().getImagePoint( i );
             
             if ( guiIsOn ) {
                 ofDrawBitmapStringHighlight( ofToString( i ), landmarkPos[i].x, landmarkPos[i].y );
             }
-            
         }
-        
         
         float dist1 = ofDist( landmarkPos[37].x, landmarkPos[37].y, landmarkPos[41].x, landmarkPos[41].y );
         float dist2 = ofDist( landmarkPos[38].x, landmarkPos[38].y, landmarkPos[40].x, landmarkPos[40].y );
         float dist3 = ofDist( landmarkPos[36].x, landmarkPos[36].y, landmarkPos[39].x, landmarkPos[39].y );
-        eyeAspectRatioLeft = ( dist1 + dist2 ) / ( 2.0 * dist3 );
-        
+        eyeAspectRatioLeft = ( dist1 + dist2 ) / ( 2 * dist3 );
+        //ofLog() << "eye left: " << eyeAspectRatioLeft;
         
         float dist4 = ofDist( landmarkPos[43].x, landmarkPos[43].y, landmarkPos[47].x, landmarkPos[47].y );
         float dist5 = ofDist( landmarkPos[44].x, landmarkPos[44].y, landmarkPos[46].x, landmarkPos[46].y );
         float dist6 = ofDist( landmarkPos[42].x, landmarkPos[42].y, landmarkPos[45].x, landmarkPos[45].y );
-        eyeAspectRatioRight = ( dist4 + dist5 ) / ( 2.0 * dist6 );
-        
-        
-        
-        // Measure width of face
-        //float landmarkDistance = ofDist( landmarkPos[2].x, landmarkPos[2].y, landmarkPos[14].x, landmarkPos[14].y );
-        
-        
-        // Draw a red circle
-        /*ofPushStyle();
-        ofSetColor( 255, 0, 0 );
-        float circleRadius = landmarkDistance/5;
-        ofDrawCircle( landmarkPos[30].x, landmarkPos[30].y, circleRadius );
-        ofPopStyle();*/
-        
-        //float imageWidth = landmarkDistance/2;
-        
-        // Image: image.draw( x, y, width, height );
-        //image.draw( landmarkPos[30].x - (landmarkDistance/2), landmarkPos[30].y - (landmarkDistance/2), landmarkDistance, landmarkDistance );
+        eyeAspectRatioRight = ( dist4 + dist5 ) / ( 2 * dist6 );
+        //ofLog() << "eye right: " << eyeAspectRatioRight;
         
     }
     
-        
     
-    float averageEAR = (eyeAspectRatioLeft + eyeAspectRatioRight) / 2.0;
+    float averageEAR = ( eyeAspectRatioLeft + eyeAspectRatioRight ) / 2;
     
     if ( guiToggle_logToFile ) {
         ofLogToFile( "myLogFile.txt", true );
-        ofLog() << "average EAR: " << averageEAR;
+        ofLog() << "avreage EAR: " << averageEAR;
     }
     
     if ( averageEAR < guiSlider_threshold ) {
         blinkCounter++;
     } else {
         if ( blinkCounter >= guiSlider_consec_frames ) {
-            
-            // This is where we register blinks
-            
             blinkTotal++;
             blinkCounter = 0;
-            
-            if ( guiToggle_logToFile ) {
-                ofLog() << "BLINK!";
-            }
             
             if ( isOn == false ) {
                 ofSetColor( 255, 0, 0 );
@@ -126,21 +106,11 @@ void ofApp::draw(){
             
         }
     }
-
+    
     if ( guiIsOn ) {
         ofDrawBitmapStringHighlight( "Blinks: " + ofToString( blinkTotal ), 20, 100 );
         ofDrawBitmapStringHighlight( "Average EAR: " + ofToString( averageEAR ), 20, 150 );
     }
-    
-    
-    
-
-    
-        
-    // Draw tracker landmarks
-    //tracker.drawDebug();
-    
-    //tracker.drawDebugPose();
     
     if ( guiIsOn ) {
         gui.draw();
@@ -149,16 +119,11 @@ void ofApp::draw(){
 
 }
 
-
 //--------------------------------------------------------------
 void ofApp::keyPressed(int key){
     
     if ( key == 'g' || key == 'G' ) {
-        if ( ! guiIsOn ) {
-            guiIsOn = true;
-        } else {
-            guiIsOn = false;
-        }
+        guiIsOn = !guiIsOn;
     }
 
 }
